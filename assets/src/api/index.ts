@@ -10,6 +10,13 @@ export type Candidate = {
   position: number
 }
 
+interface CandidatesByStatus {
+  new?: Candidate[]
+  interview?: Candidate[]
+  hired?: Candidate[]
+  rejected?: Candidate[]
+}
+
 export const getJobs = async (): Promise<Job[]> => {
   const response = await fetch(`http://localhost:4000/api/jobs`)
   const { data } = await response.json()
@@ -23,8 +30,8 @@ export const getJob = async (jobId?: string): Promise<Job | null> => {
   return data
 }
 
-export const getCandidates = async (jobId?: string): Promise<Candidate[]> => {
-  if (!jobId) return []
+export const getCandidates = async (jobId?: string): Promise<CandidatesByStatus> => {
+  if (!jobId) return {}
   const response = await fetch(`http://localhost:4000/api/jobs/${jobId}/candidates`)
   const { data } = await response.json()
   return data

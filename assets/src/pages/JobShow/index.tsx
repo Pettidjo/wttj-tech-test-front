@@ -11,13 +11,6 @@ import { Badge } from '@welcome-ui/badge'
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
 
-interface SortedCandidates {
-  new?: Candidate[]
-  interview?: Candidate[]
-  hired?: Candidate[]
-  rejected?: Candidate[]
-}
-
 function JobShow() {
   const { jobId } = useParams()
   const { job } = useJob(jobId)
@@ -26,10 +19,11 @@ function JobShow() {
   const sortedCandidates = useMemo(() => {
     if (!candidates) return {}
 
-    return candidates.reduce<SortedCandidates>((acc, c: Candidate) => {
-      acc[c.status] = [...(acc[c.status] || []), c].sort((a, b) => a.position - b.position)
-      return acc
-    }, {})
+    Object.values(candidates).forEach((candidateArray: Candidate[]) => {
+      candidateArray.sort((a, b) => a.position - b.position)
+    })
+
+    return candidates
   }, [candidates])
 
   return (
@@ -44,6 +38,7 @@ function JobShow() {
         <Flex gap={10}>
           {COLUMNS.map(column => (
             <Box
+              key={column}
               w={300}
               border={1}
               backgroundColor="white"
@@ -65,7 +60,7 @@ function JobShow() {
               </Flex>
               <Flex direction="column" p={10} pb={0}>
                 {sortedCandidates[column]?.map((candidate: Candidate) => (
-                  <CandidateCard candidate={candidate} />
+                  <CandidateCard key={candidate.email} candidate={candidate} />
                 ))}
               </Flex>
             </Box>
