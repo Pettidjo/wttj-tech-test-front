@@ -1,4 +1,4 @@
-type Job = {
+export type Job = {
   id: string
   name: string
 }
@@ -10,7 +10,7 @@ export type Candidate = {
   position: number
 }
 
-interface CandidatesByStatus {
+export type CandidatesByStatus = {
   new?: Candidate[]
   interview?: Candidate[]
   hired?: Candidate[]
