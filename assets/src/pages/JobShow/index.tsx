@@ -3,9 +3,9 @@ import { useParams } from 'react-router-dom'
 import { useJob, useCandidates } from '../../hooks'
 import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
-import { Text } from '@welcome-ui/text'
 import { Candidate } from '../../api'
 import Column from '../../components/DnD/Column'
+import JobBanner from './JobBanner'
 
 import {
   closestCorners,
@@ -151,11 +151,7 @@ function JobShow() {
 
   return (
     <>
-      <Box backgroundColor="neutral-70" p={20} alignItems="center">
-        <Text variant="h5" color="white" m={0}>
-          {job?.name}
-        </Text>
-      </Box>
+      <JobBanner jobName={job?.name} />
 
       {isLoading ? (
         <Box p={20}>
