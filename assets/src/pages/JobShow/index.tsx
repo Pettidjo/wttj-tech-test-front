@@ -22,7 +22,7 @@ import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
 
-export type Column = {
+export type ColumnType = {
   id: string
   name: string
   candidates: Candidate[]
@@ -32,7 +32,7 @@ function JobShow() {
   const { jobId } = useParams()
   const { job } = useJob(jobId)
   const { isLoading, candidates } = useCandidates(jobId)
-  const [columnsSorted, setColumns] = useState<Column[]>([])
+  const [columnsSorted, setColumns] = useState<ColumnType[]>([])
 
   useEffect(() => {
     if (!candidates) return
@@ -43,7 +43,7 @@ function JobShow() {
       candidates: candidates[column] ?? [],
     }))
 
-    newColumns.forEach((column: Column) => {
+    newColumns.forEach((column: ColumnType) => {
       column.candidates.sort((a, b) => a.position - b.position)
     })
 

@@ -6,13 +6,13 @@ import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
 import { Badge } from '@welcome-ui/badge'
 import { Candidate } from '../../api'
-import type { Column } from '../../pages/JobShow/index'
+import type { ColumnType } from '../../pages/JobShow/index'
 
 export default function Column({
   column,
   candidates,
 }: {
-  column: Column
+  column: ColumnType
   candidates: Candidate[]
 }) {
   const { setNodeRef } = useDroppable({ id: column.id })
