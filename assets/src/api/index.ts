@@ -36,3 +36,27 @@ export const getCandidates = async (jobId?: string): Promise<CandidatesByStatus>
   const { data } = await response.json()
   return data
 }
+
+export const updateCandidate = async (candidate: Candidate, jobId?: string): Promise<boolean> => {
+  const candidateBody = {
+    candidate: candidate,
+  }
+
+  const response = await fetch(
+    `http://localhost:4000/api/jobs/${jobId}/candidates/${candidate.id}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(candidateBody),
+    }
+  )
+
+  if (!response.ok) {
+    const error = new Error('An error occurred while updating the candidate')
+    throw error
+  }
+
+  return response.json()
+}
