@@ -31,7 +31,6 @@ export default function Column({
         backgroundColor="white"
         borderColor="neutral-30"
         borderRadius="md"
-        overflow="hidden"
       >
         <Flex
           p={10}
