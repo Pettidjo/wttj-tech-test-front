@@ -9,6 +9,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
   })
 
   const style = {
+    cursor: 'grab',
     transform: CSS.Transform.toString(transform),
   }
 
