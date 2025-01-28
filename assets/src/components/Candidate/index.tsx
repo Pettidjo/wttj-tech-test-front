@@ -4,12 +4,13 @@ import { CSS } from '@dnd-kit/utilities'
 import { useSortable } from '@dnd-kit/sortable'
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
-  const { attributes, listeners, setNodeRef, transform } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: candidate.email,
   })
 
   const style = {
     cursor: 'grab',
+    transition,
     transform: CSS.Transform.toString(transform),
   }
 
