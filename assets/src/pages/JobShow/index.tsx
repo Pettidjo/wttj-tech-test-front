@@ -5,8 +5,8 @@ import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
 import { Candidate } from '../../api'
 import Column from '../../components/DnD/Column'
-import JobBanner from './JobBanner'
-import Alert from './Alert'
+import JobBanner from '../../components/Job/JobBanner'
+import Alert from '../../components/UI/Alert'
 
 import {
   closestCorners,
