@@ -36,7 +36,7 @@ export const useUpdateCandidate = (jobId?: string) => {
 
   const mutation = useMutation({
     mutationFn: (candidate: Candidate) => updateCandidate(candidate, jobId),
-    onSuccess: () => {
+    onError: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] })
     },
   })
