@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useJob, useCandidates } from '../../hooks'
+import { useJob, useCandidates, useUpdateCandidate } from '../../hooks'
 import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
 import { Candidate } from '../../api'
 import Column from '../../components/DnD/Column'
 import JobBanner from './JobBanner'
+import Alert from './Alert'
 
 import {
   closestCorners,
@@ -16,15 +17,18 @@ import {
   KeyboardSensor,
   DragMoveEvent,
   DragEndEvent,
+  DragStartEvent,
 } from '@dnd-kit/core'
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
+import dragAndDropUtils from '../../hooks/DragAndDropUtils'
 
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
+const POSITION: number = 16384
 
 export type ColumnType = {
-  id: string
-  name: string
+  id: Statuses
+  name: Statuses
   candidates: Candidate[]
 }
 
@@ -32,6 +36,8 @@ function JobShow() {
   const { jobId } = useParams()
   const { job } = useJob(jobId)
   const { isLoading, candidates } = useCandidates(jobId)
+  const { mutate: updateCandidate, isError } = useUpdateCandidate(jobId)
+  const [initialColumn, setInitialColumn] = useState<Statuses | null>(null)
   const [columnsSorted, setColumns] = useState<ColumnType[]>([])
 
   useEffect(() => {
@@ -50,24 +56,11 @@ function JobShow() {
     setColumns(newColumns)
   }, [candidates])
 
-  const findColumn = (unique: string | null) => {
-    if (!unique) {
-      return null
-    }
-
-    if (columnsSorted.some(c => c.id === unique)) {
-      return columnsSorted.find(c => c.id === unique) ?? null
-    }
-
-    const id = String(unique)
-
-    const itemWithColumnId = columnsSorted.flatMap(c => {
-      const columnId = c.id
-      return c.candidates.map(candidate => ({ itemId: candidate.email, columnId: columnId }))
+  const candidatesNewPosition = (candidates: Candidate[]) => {
+    return candidates.map((candidate, index) => {
+      const newPos = POSITION * (index + 1)
+      return { ...candidate, position: newPos }
     })
-
-    const columnId = itemWithColumnId.find(i => i.itemId === id)?.columnId
-    return columnsSorted.find(c => c.id === columnId) ?? null
   }
 
   const sensors = useSensors(
@@ -77,81 +70,91 @@ function JobShow() {
     })
   )
 
-  const handleDragMove = (event: DragMoveEvent) => {
-    const { active, over, delta } = event
-    const activeId = String(active.id)
-    const overId = over ? String(over.id) : null
-
-    const activeColumn = findColumn(activeId)
-    const overColumn = findColumn(overId)
-
-    if (!activeColumn || !overColumn || activeColumn === overColumn) {
-      return null
-    }
-
-    setColumns(prevState => {
-      const activeItems = activeColumn.candidates
-      const overItems = overColumn.candidates
-      const activeIndex = activeItems.findIndex(i => i.email === activeId)
-      const overIndex = overItems.findIndex(i => i.email === overId)
-
-      const newIndex = () => {
-        const putOnBelowLastItem = overIndex === overItems.length - 1 && delta.y > 0
-        const modifier = putOnBelowLastItem ? 1 : 0
-        return overIndex >= 0 ? overIndex + modifier : overItems.length + 1
-      }
-
-      return prevState.map(c => {
-        if (c.id === activeColumn.id) {
-          c.candidates = activeItems.filter(i => i.email !== activeId)
-          return c
-        } else if (c.id === overColumn.id) {
-          c.candidates = [
-            ...overItems.slice(0, newIndex()),
-            activeItems[activeIndex],
-            ...overItems.slice(newIndex(), overItems.length),
-          ]
-          return c
-        } else {
-          return c
-        }
-      })
-    })
+  const handleDragStart = (event: DragStartEvent) => {
+    const { activeColumn } = dragAndDropUtils(event, columnsSorted)
+    setInitialColumn(activeColumn?.id ?? null)
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    const activeId = String(active.id)
-    const overId = over ? String(over.id) : null
-    const activeColumn = findColumn(activeId)
-    const overColumn = findColumn(overId)
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { activeId, activeIndex, overIndex, activeColumn, overColumn, newIndex } =
+      dragAndDropUtils(event, columnsSorted)
 
-    if (!activeColumn || !overColumn || activeColumn !== overColumn) {
+    if (!activeColumn || !overColumn) {
       return null
     }
 
-    const activeIndex = activeColumn.candidates.findIndex(i => i.email === activeId)
-    const overIndex = overColumn.candidates.findIndex(i => i.email === overId)
-
-    if (activeIndex !== overIndex) {
+    if (activeColumn === overColumn) {
+      if (activeIndex !== overIndex) {
+        setColumns(prevState => {
+          return prevState.map(column => {
+            if (column.id === activeColumn.id) {
+              column.candidates = arrayMove(overColumn.candidates, activeIndex, overIndex)
+              column.candidates = candidatesNewPosition(column.candidates)
+              return column
+            } else {
+              return column
+            }
+          })
+        })
+      }
+    } else {
       setColumns(prevState => {
-        return prevState.map(column => {
-          if (column.id === activeColumn.id) {
-            column.candidates = arrayMove(overColumn.candidates, activeIndex, overIndex)
-            return column
+        const activeItems = activeColumn.candidates
+        const overItems = overColumn.candidates
+
+        return prevState.map(c => {
+          if (c.id === activeColumn.id) {
+            c.candidates = activeItems.filter(i => i.email !== activeId)
+            c.candidates = candidatesNewPosition(c.candidates)
+            return c
+          } else if (c.id === overColumn.id) {
+            const newIndexes = newIndex(overIndex, overItems)
+            c.candidates = [
+              ...overItems.slice(0, newIndexes),
+              { ...activeItems[activeIndex], status: overColumn.name },
+              ...overItems.slice(newIndexes, overItems.length),
+            ]
+            c.candidates = candidatesNewPosition(c.candidates)
+
+            return c
           } else {
-            return column
+            return c
           }
         })
       })
     }
+  }
 
-    console.log(columnsSorted)
+  const handleDragEnd = (event: DragEndEvent) => {
+    // const { activeColumn } = dragAndDropUtils(event, columnsSorted)
+
+    // const col1 = columnsSorted.find(column => column.id === initialColumn)
+    // const col2 = columnsSorted.find(column => column.id === activeColumn?.id)
+
+    // col2?.candidates
+    //   .slice(0)
+    //   .reverse()
+    //   .map(candidate => {
+    //     console.log(candidate)
+    //     updateCandidate(candidate)
+    //   })
+
+    // if (initialColumn !== activeColumn?.id)
+    //   col1?.candidates
+    //     .slice(0)
+    //     .reverse()
+    //     .map(candidate => {
+    //       updateCandidate(candidate)
+    //     })
+
+    setInitialColumn(null)
   }
 
   return (
     <>
       <JobBanner jobName={job?.name} />
+
+      {isError && <Alert message="Une erreur est survenue. Impossible de déplacer la carte." />}
 
       {isLoading ? (
         <Box p={20}>
@@ -160,20 +163,23 @@ function JobShow() {
           </Flex>
         </Box>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragOver={handleDragMove}
-          onDragEnd={handleDragEnd}
-        >
-          <Box p={20}>
-            <Flex gap={10}>
-              {columnsSorted.map(column => (
-                <Column key={column.id} column={column} candidates={column.candidates} />
-              ))}
-            </Flex>
-          </Box>
-        </DndContext>
+        <Box style={{ height: '100%' }}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragMove}
+            onDragEnd={handleDragEnd}
+          >
+            <Box p={20}>
+              <Flex gap={10}>
+                {columnsSorted.map(column => (
+                  <Column key={column.id} column={column} candidates={column.candidates} />
+                ))}
+              </Flex>
+            </Box>
+          </DndContext>
+        </Box>
       )}
     </>
   )
