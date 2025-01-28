@@ -20,7 +20,7 @@ import {
   DragStartEvent,
 } from '@dnd-kit/core'
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import dragAndDropUtils from '../../hooks/DragAndDropUtils'
+import dragAndDropUtils from '../../utils/DragAndDropUtils'
 
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
