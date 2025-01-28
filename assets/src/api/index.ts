@@ -37,7 +37,7 @@ export const getCandidates = async (jobId?: string): Promise<CandidatesByStatus>
   return data
 }
 
-export const updateCandidate = async (candidate: Candidate, jobId?: string): Promise<boolean> => {
+export const updateCandidate = async (candidate: Candidate, jobId?: string): Promise<Response> => {
   const candidateBody = {
     candidate: candidate,
   }
