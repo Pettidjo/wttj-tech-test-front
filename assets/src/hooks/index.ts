@@ -25,6 +25,7 @@ export const useCandidates = (jobId?: string) => {
   const { isLoading, error, data } = useQuery({
     queryKey: ['candidates', jobId],
     queryFn: () => getCandidates(jobId),
+    refetchOnWindowFocus: true,
     enabled: !!jobId,
   })
 
