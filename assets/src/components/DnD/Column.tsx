@@ -9,20 +9,15 @@ export default function Column({ id, items }: { id: string; items: Candidate[] }
   const { setNodeRef } = useDroppable({ id })
 
   return (
-    <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
-      <Box
-        ref={setNodeRef}
-        w={300}
-        border={1}
-        backgroundColor="white"
-        borderColor="neutral-30"
-        borderRadius="md"
-      >
-        <ColumnName columnName={id} candidates={items} />
-        {items.map(item => (
-          <CandidateCard key={item.id} candidate={item} />
-        ))}
-      </Box>
-    </SortableContext>
+    <Box w={300} border={1} backgroundColor="white" borderColor="neutral-30" borderRadius="md">
+      <ColumnName columnName={id} candidates={items} />
+      <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
+        <div ref={setNodeRef}>
+          {items.map(item => (
+            <CandidateCard key={item.id} candidate={item} />
+          ))}
+        </div>
+      </SortableContext>
+    </Box>
   )
 }
