@@ -3,26 +3,14 @@ import { useDroppable } from '@dnd-kit/core'
 import CandidateCard from '../Candidate'
 import { Box } from '@welcome-ui/box'
 import { Candidate } from '../../api'
-import type { ColumnType } from '../../pages/JobShow/index'
 import ColumnName from './ColumnName'
 
-export default function Column({
-  column,
-  candidates,
-}: {
-  column: ColumnType
-  candidates: Candidate[]
-}) {
-  const { setNodeRef } = useDroppable({ id: column.id })
+export default function Column({ id, items }: { id: string; items: Candidate[] }) {
+  const { setNodeRef } = useDroppable({ id })
 
   return (
-    <SortableContext
-      id={column.id}
-      items={candidates.map((candidate: Candidate) => candidate.email)}
-      strategy={rectSortingStrategy}
-    >
+    <SortableContext id={id} items={items} strategy={rectSortingStrategy}>
       <Box
-        key={column.id}
         ref={setNodeRef}
         w={300}
         border={1}
@@ -30,9 +18,9 @@ export default function Column({
         borderColor="neutral-30"
         borderRadius="md"
       >
-        <ColumnName columnName={column.name} candidates={candidates} />
-        {candidates.map(candidate => (
-          <CandidateCard key={candidate.email} candidate={candidate} />
+        <ColumnName columnName={id} candidates={items} />
+        {items.map(item => (
+          <CandidateCard key={item.id} candidate={item} />
         ))}
       </Box>
     </SortableContext>
