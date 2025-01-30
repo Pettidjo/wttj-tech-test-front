@@ -224,7 +224,7 @@ function JobShow() {
             candidate
           )
         }
-        mutate({ ...candidate, position: magicNumber })
+        mutate({ ...candidate })
         return updatedCandidates
       })
     },
