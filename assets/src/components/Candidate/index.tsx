@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable'
 
 function CandidateCard({ candidate }: { candidate: Candidate }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-    id: candidate.email,
+    id: candidate.id,
   })
 
   const style = {
@@ -16,7 +16,11 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
   return (
     <Card m={10} ref={setNodeRef} {...attributes} {...listeners} style={style}>
-      <Card.Body>{candidate.email}</Card.Body>
+      <Card.Body>
+        <p>id: {candidate.id}</p>
+        <p>email: {candidate.email}</p>
+        <p>position: {candidate.position}</p>
+      </Card.Body>
     </Card>
   )
 }
