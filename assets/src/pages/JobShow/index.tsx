@@ -16,7 +16,7 @@ import { insertAtIndex, removeAtIndex } from '../../utils/array'
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
 
-const MOVEMENT_THRESHOLD = 10 // Seuil de mouvement minimum en pixels
+const MOVEMENT_THRESHOLD = 10 // Minimum motion threshold in pixels
 const magicNumber: number = 16384
 
 const initialObject: CandidatesByStatus = {
@@ -31,7 +31,7 @@ function JobShow() {
   const lastMousePosition = useRef<{ x: number; y: number } | null>(null)
 
   const { job } = useJob(jobId)
-  const { isLoading, candidates } = useCandidates(jobId)
+  const { isLoading, candidates, isFetching } = useCandidates(jobId)
   const { mutate, isError } = useUpdateCandidate(jobId)
   const [sortedCandidates, setSortedCandidates] = useState<CandidatesByStatus>(initialObject)
 
@@ -47,7 +47,7 @@ function JobShow() {
     )
 
     setSortedCandidates(sortedCandidates)
-  }, [candidates])
+  }, [candidates, isFetching])
 
   const findContainer = useCallback(
     (id: Statuses | number) => {
@@ -130,13 +130,10 @@ function JobShow() {
       const activeId = active?.id as number
       const overId = over?.id as number | Statuses
 
-      console.log({ overId })
-
       if (!overId) return
 
       const activeContainer = findContainer(activeId) as Statuses
       const overContainer = findContainer(overId) as Statuses
-      console.log({ overContainer })
 
       const currentMousePosition = { x: event.delta.x, y: event.delta.y }
       if (
@@ -150,15 +147,6 @@ function JobShow() {
       lastMousePosition.current = currentMousePosition
 
       if (!activeContainer || !overContainer || activeContainer === overContainer) return
-
-      // If we move an element above an empty column
-      if (
-        overContainer &&
-        sortedCandidates[overContainer] &&
-        !sortedCandidates[overContainer].length
-      ) {
-        console.log(`Move to an empty column: ${overContainer}`)
-      }
 
       setSortedCandidates(prev => {
         const candidate = findItem(activeId)
@@ -177,17 +165,19 @@ function JobShow() {
           return prev // Avoids a looping update
         }
 
+        const candidateUpdatedStatus = { ...candidate, status: overContainer }
+
         return moveBetweenContainers(
           prev,
           activeContainer,
           activeIndex,
           overContainer,
           overIndex,
-          candidate
+          candidateUpdatedStatus
         )
       })
     },
-    [findContainer, findItem, moveBetweenContainers, sortedCandidates]
+    [findContainer, findItem, moveBetweenContainers]
   )
 
   const handleDragEnd = useCallback(
@@ -197,8 +187,7 @@ function JobShow() {
       const overId = over?.id as number
 
       // If no movement has been made, we stop here
-      if (!over || activeId === overId) return
-
+      if (!over || !overId) return
       const activeContainer = active.data.current?.sortable.containerId as Statuses
       const overContainer = over.data.current?.sortable.containerId as Statuses
       const activeIndex = active.data.current?.sortable.index
@@ -210,21 +199,23 @@ function JobShow() {
       setSortedCandidates(prev => {
         if (!prev[activeContainer] || !prev[overContainer]) return prev
 
+        let updatedCandidates = prev
+
         if (activeContainer === overContainer) {
-          // Reorder column with `arrayMove`
+          // Reorder the column using arrayMove
           const updatedColumn = arrayMove(prev[overContainer], activeIndex, overIndex)
 
-          // Change the position of the moved element
+          // Calculate new position
           const prevPosition = updatedColumn[overIndex - 1]?.position ?? 0
           const nextPosition = updatedColumn[overIndex + 1]?.position ?? 0
-
           const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
 
           updatedColumn[overIndex] = { ...updatedColumn[overIndex], position: newPosition }
 
-          return { ...prev, [overContainer]: updatedColumn }
+          updatedCandidates = { ...prev, [overContainer]: updatedColumn }
         } else {
-          return moveBetweenContainers(
+          // Move between containers
+          updatedCandidates = moveBetweenContainers(
             prev,
             activeContainer,
             activeIndex,
@@ -233,9 +224,11 @@ function JobShow() {
             candidate
           )
         }
+        mutate({ ...candidate, position: magicNumber })
+        return updatedCandidates
       })
     },
-    [findItem, moveBetweenContainers]
+    [findItem, moveBetweenContainers, mutate]
   )
 
   return (
