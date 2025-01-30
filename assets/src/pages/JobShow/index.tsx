@@ -1,154 +1,242 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useCallback, useState, memo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useJob, useCandidates, useUpdateCandidate } from '../../hooks'
 import { Flex } from '@welcome-ui/flex'
 import { Box } from '@welcome-ui/box'
-import { Candidate } from '../../api'
+import { Candidate, CandidatesByStatus } from '../../api'
 import Column from '../../components/DnD/Column'
 import JobBanner from '../../components/Job/JobBanner'
 import Alert from '../../components/UI/Alert'
+import DragAndDropProvider from '../../components/DnD/DragAndDropProvider'
 
-import {
-  closestCorners,
-  DndContext,
-  PointerSensor,
-  useSensors,
-  useSensor,
-  KeyboardSensor,
-  DragMoveEvent,
-  DragEndEvent,
-  DragStartEvent,
-} from '@dnd-kit/core'
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import dragAndDropUtils from '../../utils/DragAndDropUtils'
+import { DragMoveEvent, DragEndEvent } from '@dnd-kit/core'
+import { arrayMove } from '@dnd-kit/sortable'
+import { insertAtIndex, removeAtIndex } from '../../utils/array'
 
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
-const POSITION: number = 16384
 
-export type ColumnType = {
-  id: Statuses
-  name: Statuses
-  candidates: Candidate[]
+const MOVEMENT_THRESHOLD = 10 // Seuil de mouvement minimum en pixels
+const magicNumber: number = 16384
+
+const initialObject: CandidatesByStatus = {
+  new: [],
+  interview: [],
+  hired: [],
+  rejected: [],
 }
 
 function JobShow() {
   const { jobId } = useParams()
+  const lastMousePosition = useRef<{ x: number; y: number } | null>(null)
+
   const { job } = useJob(jobId)
   const { isLoading, candidates } = useCandidates(jobId)
-  const { mutate: updateCandidate, isError } = useUpdateCandidate(jobId)
-  const [initialColumn, setInitialColumn] = useState<Statuses | null>(null)
-  const [columnsSorted, setColumns] = useState<ColumnType[]>([])
+  const { mutate, isError } = useUpdateCandidate(jobId)
+  const [sortedCandidates, setSortedCandidates] = useState<CandidatesByStatus>(initialObject)
 
   useEffect(() => {
     if (!candidates) return
 
-    const newColumns = COLUMNS.map(column => ({
-      id: column,
-      name: column,
-      candidates: candidates[column] ?? [],
-    }))
+    const sortedCandidates = COLUMNS.reduce(
+      (acc, column) => {
+        acc[column] = [...(candidates[column] || [])].sort((a, b) => a.position - b.position)
+        return acc
+      },
+      { ...initialObject }
+    )
 
-    newColumns.forEach((column: ColumnType) => {
-      column.candidates.sort((a, b) => a.position - b.position)
-    })
-
-    setColumns(newColumns)
+    setSortedCandidates(sortedCandidates)
   }, [candidates])
 
-  const candidatesNewPosition = (candidates: Candidate[]) => {
-    return candidates.map((candidate, index) => {
-      const newPos = POSITION * (index + 1)
-      return { ...candidate, position: newPos }
-    })
-  }
+  const findContainer = useCallback(
+    (id: Statuses | number) => {
+      if (id in sortedCandidates) return id
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+      const container = Object.keys(sortedCandidates).find(key =>
+        sortedCandidates[key as keyof CandidatesByStatus]?.some((item: Candidate) => item.id === id)
+      )
+
+      return container || null
+    },
+    [sortedCandidates]
   )
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { activeColumn } = dragAndDropUtils(event, columnsSorted)
-    setInitialColumn(activeColumn?.id ?? null)
-  }
+  const findItem = useCallback(
+    (id: number) => {
+      return Object.values(sortedCandidates)
+        .flatMap(a => a)
+        .find(c => c.id === id)
+    },
+    [sortedCandidates]
+  )
 
-  const handleDragMove = (event: DragMoveEvent) => {
-    const { activeId, activeIndex, overIndex, activeColumn, overColumn, newIndex } =
-      dragAndDropUtils(event, columnsSorted)
-
-    if (!activeColumn || !overColumn) {
-      return null
-    }
-
-    if (activeColumn === overColumn) {
-      if (activeIndex !== overIndex) {
-        setColumns(prevState => {
-          return prevState.map(column => {
-            if (column.id === activeColumn.id) {
-              column.candidates = arrayMove(overColumn.candidates, activeIndex, overIndex)
-              column.candidates = candidatesNewPosition(column.candidates)
-              return column
-            } else {
-              return column
-            }
-          })
-        })
-      }
+  const calculateNewPosition = (
+    prevPosition: number,
+    nextPosition: number,
+    magicNumber: number
+  ): number => {
+    if (prevPosition === nextPosition) {
+      return magicNumber
+    } else if (prevPosition !== 0 && nextPosition === 0) {
+      return prevPosition + magicNumber
     } else {
-      setColumns(prevState => {
-        const activeItems = activeColumn.candidates
-        const overItems = overColumn.candidates
-
-        return prevState.map(c => {
-          if (c.id === activeColumn.id) {
-            c.candidates = activeItems.filter(i => i.email !== activeId)
-            c.candidates = candidatesNewPosition(c.candidates)
-            return c
-          } else if (c.id === overColumn.id) {
-            const newIndexes = newIndex(overIndex, overItems)
-            c.candidates = [
-              ...overItems.slice(0, newIndexes),
-              { ...activeItems[activeIndex], status: overColumn.name },
-              ...overItems.slice(newIndexes, overItems.length),
-            ]
-            c.candidates = candidatesNewPosition(c.candidates)
-
-            return c
-          } else {
-            return c
-          }
-        })
-      })
+      return (prevPosition + nextPosition) / 2
     }
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    // const { activeColumn } = dragAndDropUtils(event, columnsSorted)
+  const moveBetweenContainers = useCallback(
+    (
+      items: CandidatesByStatus,
+      activeContainer: Statuses,
+      activeIndex: number,
+      overContainer: Statuses,
+      overIndex: number,
+      item: Candidate
+    ) => {
+      if (!items[activeContainer] || !items[overContainer]) return items
 
-    // const col1 = columnsSorted.find(column => column.id === initialColumn)
-    // const col2 = columnsSorted.find(column => column.id === activeColumn?.id)
+      // Check if element already exists in another container
+      if (findContainer(item.id) !== activeContainer) {
+        console.warn(`The item ${item.id} already exists elsewhere and will not be added.`)
+        return items
+      }
 
-    // col2?.candidates
-    //   .slice(0)
-    //   .reverse()
-    //   .map(candidate => {
-    //     console.log(candidate)
-    //     updateCandidate(candidate)
-    //   })
+      const prevPosition = items[overContainer][overIndex - 1]?.position || 0
+      const nextPosition = items[overContainer][overIndex]?.position || 0
+      const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
 
-    // if (initialColumn !== activeColumn?.id)
-    //   col1?.candidates
-    //     .slice(0)
-    //     .reverse()
-    //     .map(candidate => {
-    //       updateCandidate(candidate)
-    //     })
+      // Check for duplicates before updating
+      if (items[overContainer].some(c => c.id === item.id)) {
+        console.warn(`Duplicate detected for item ${item.id} in column ${overContainer}.`)
+        return items
+      }
 
-    setInitialColumn(null)
-  }
+      return {
+        ...items,
+        [activeContainer]: removeAtIndex(items[activeContainer], activeIndex),
+        [overContainer]: insertAtIndex(items[overContainer], overIndex, {
+          ...item,
+          position: newPosition,
+        }),
+      }
+    },
+    [findContainer]
+  )
+
+  const handleDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      const { over, active } = event
+      const activeId = active?.id as number
+      const overId = over?.id as number | Statuses
+
+      console.log({ overId })
+
+      if (!overId) return
+
+      const activeContainer = findContainer(activeId) as Statuses
+      const overContainer = findContainer(overId) as Statuses
+      console.log({ overContainer })
+
+      const currentMousePosition = { x: event.delta.x, y: event.delta.y }
+      if (
+        lastMousePosition.current &&
+        Math.abs(lastMousePosition.current.x - currentMousePosition.x) < MOVEMENT_THRESHOLD &&
+        Math.abs(lastMousePosition.current.y - currentMousePosition.y) < MOVEMENT_THRESHOLD
+      ) {
+        return // Prevents updates if movement is too small
+      }
+
+      lastMousePosition.current = currentMousePosition
+
+      if (!activeContainer || !overContainer || activeContainer === overContainer) return
+
+      // If we move an element above an empty column
+      if (
+        overContainer &&
+        sortedCandidates[overContainer] &&
+        !sortedCandidates[overContainer].length
+      ) {
+        console.log(`Move to an empty column: ${overContainer}`)
+      }
+
+      setSortedCandidates(prev => {
+        const candidate = findItem(activeId)
+
+        if (!prev[activeContainer] || !prev[overContainer] || !candidate) return prev
+
+        const activeIndex = active.data.current?.sortable.index
+        const overIndex = over?.data.current?.sortable.index || 0
+
+        const alreadyMoved =
+          prev[activeContainer] &&
+          prev[overContainer] &&
+          prev[overContainer].some(c => c.id === activeId)
+
+        if (alreadyMoved) {
+          return prev // Avoids a looping update
+        }
+
+        return moveBetweenContainers(
+          prev,
+          activeContainer,
+          activeIndex,
+          overContainer,
+          overIndex,
+          candidate
+        )
+      })
+    },
+    [findContainer, findItem, moveBetweenContainers, sortedCandidates]
+  )
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      const activeId = active?.id as number
+      const overId = over?.id as number
+
+      // If no movement has been made, we stop here
+      if (!over || activeId === overId) return
+
+      const activeContainer = active.data.current?.sortable.containerId as Statuses
+      const overContainer = over.data.current?.sortable.containerId as Statuses
+      const activeIndex = active.data.current?.sortable.index
+      const overIndex = over.data.current?.sortable.index || 0
+
+      const candidate = findItem(activeId)
+      if (!candidate) return
+
+      setSortedCandidates(prev => {
+        if (!prev[activeContainer] || !prev[overContainer]) return prev
+
+        if (activeContainer === overContainer) {
+          // Reorder column with `arrayMove`
+          const updatedColumn = arrayMove(prev[overContainer], activeIndex, overIndex)
+
+          // Change the position of the moved element
+          const prevPosition = updatedColumn[overIndex - 1]?.position ?? 0
+          const nextPosition = updatedColumn[overIndex + 1]?.position ?? 0
+
+          const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
+
+          updatedColumn[overIndex] = { ...updatedColumn[overIndex], position: newPosition }
+
+          return { ...prev, [overContainer]: updatedColumn }
+        } else {
+          return moveBetweenContainers(
+            prev,
+            activeContainer,
+            activeIndex,
+            overContainer,
+            overIndex,
+            candidate
+          )
+        }
+      })
+    },
+    [findItem, moveBetweenContainers]
+  )
 
   return (
     <>
@@ -164,21 +252,15 @@ function JobShow() {
         </Box>
       ) : (
         <Box style={{ height: '100%' }}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragMove}
-            onDragEnd={handleDragEnd}
-          >
+          <DragAndDropProvider handleDragMove={handleDragMove} handleDragEnd={handleDragEnd}>
             <Box p={20}>
               <Flex gap={10}>
-                {columnsSorted.map(column => (
-                  <Column key={column.id} column={column} candidates={column.candidates} />
+                {Object.keys(sortedCandidates).map(c => (
+                  <Column id={c} key={c} items={sortedCandidates[c as Statuses] || []} />
                 ))}
               </Flex>
             </Box>
-          </DndContext>
+          </DragAndDropProvider>
         </Box>
       )}
     </>
