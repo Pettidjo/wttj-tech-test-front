@@ -22,14 +22,14 @@ export const useJob = (jobId?: string) => {
 }
 
 export const useCandidates = (jobId?: string) => {
-  const { isLoading, error, data } = useQuery({
+  const { isLoading, error, data, isFetching } = useQuery({
     queryKey: ['candidates', jobId],
     queryFn: () => getCandidates(jobId),
     refetchOnWindowFocus: true,
     enabled: !!jobId,
   })
 
-  return { isLoading, error, candidates: data }
+  return { isLoading, error, candidates: data, isFetching }
 }
 
 export const useUpdateCandidate = (jobId?: string) => {
