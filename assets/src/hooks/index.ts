@@ -3,12 +3,12 @@ import { getCandidates, getJob, getJobs, updateCandidate } from '../api'
 import { Candidate } from '../api'
 
 export const useJobs = () => {
-  const { isLoading, error, data } = useQuery({
+  const { isLoading, error, data, isSuccess } = useQuery({
     queryKey: ['jobs'],
     queryFn: getJobs,
   })
 
-  return { isLoading, error, jobs: data }
+  return { isLoading, error, jobs: data, isSuccess }
 }
 
 export const useJob = (jobId?: string) => {
