@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, memo, useRef } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useJob, useCandidates, useUpdateCandidate } from '../../hooks'
 import { Flex } from '@welcome-ui/flex'
@@ -49,41 +49,34 @@ function JobShow() {
     setSortedCandidates(sortedCandidates)
   }, [candidates, isFetching])
 
-  const findContainer = useCallback(
-    (id: Statuses | number) => {
-      if (id in sortedCandidates) return id
+  const findContainer = useCallback((id: Statuses | number, candidates: CandidatesByStatus) => {
+    if (id in candidates) return id
 
-      const container = Object.keys(sortedCandidates).find(key =>
-        sortedCandidates[key as keyof CandidatesByStatus]?.some((item: Candidate) => item.id === id)
-      )
+    const container = Object.keys(candidates).find(key =>
+      candidates[key as keyof CandidatesByStatus]?.some((item: Candidate) => item.id === id)
+    )
 
-      return container || null
+    return container || null
+  }, [])
+
+  const findItem = useCallback((id: number, candidates: CandidatesByStatus) => {
+    return Object.values(candidates)
+      .flatMap(a => a)
+      .find(c => c.id === id)
+  }, [])
+
+  const calculateNewPosition = useCallback(
+    (prevPosition: number, nextPosition: number, magicNumber: number): number => {
+      if (prevPosition === nextPosition) {
+        return magicNumber
+      } else if (prevPosition !== 0 && nextPosition === 0) {
+        return prevPosition + magicNumber
+      } else {
+        return (prevPosition + nextPosition) / 2
+      }
     },
-    [sortedCandidates]
+    []
   )
-
-  const findItem = useCallback(
-    (id: number) => {
-      return Object.values(sortedCandidates)
-        .flatMap(a => a)
-        .find(c => c.id === id)
-    },
-    [sortedCandidates]
-  )
-
-  const calculateNewPosition = (
-    prevPosition: number,
-    nextPosition: number,
-    magicNumber: number
-  ): number => {
-    if (prevPosition === nextPosition) {
-      return magicNumber
-    } else if (prevPosition !== 0 && nextPosition === 0) {
-      return prevPosition + magicNumber
-    } else {
-      return (prevPosition + nextPosition) / 2
-    }
-  }
 
   const moveBetweenContainers = useCallback(
     (
@@ -97,20 +90,29 @@ function JobShow() {
       if (!items[activeContainer] || !items[overContainer]) return items
 
       // Check if element already exists in another container
-      if (findContainer(item.id) !== activeContainer) {
-        console.warn(`The item ${item.id} already exists elsewhere and will not be added.`)
+      const itemExistsInOtherContainer = Object.keys(items).some(
+        key =>
+          key !== activeContainer &&
+          items[key as keyof CandidatesByStatus]?.some(c => c.id === item.id)
+      )
+
+      if (itemExistsInOtherContainer) {
+        console.log({ items })
+        const containerWithDuplicate = Object.keys(items).find(key =>
+          items[key as keyof CandidatesByStatus]?.some(c => c.id === item.id)
+        ) as Statuses
+
+        if (containerWithDuplicate) {
+          items[containerWithDuplicate] = items[containerWithDuplicate]?.filter(
+            c => c.id !== item.id
+          )
+        }
         return items
       }
 
       const prevPosition = items[overContainer][overIndex - 1]?.position || 0
       const nextPosition = items[overContainer][overIndex]?.position || 0
       const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
-
-      // Check for duplicates before updating
-      if (items[overContainer].some(c => c.id === item.id)) {
-        console.warn(`Duplicate detected for item ${item.id} in column ${overContainer}.`)
-        return items
-      }
 
       return {
         ...items,
@@ -121,115 +123,118 @@ function JobShow() {
         }),
       }
     },
-    [findContainer]
+    [calculateNewPosition]
   )
 
-  const handleDragMove = useCallback(
-    (event: DragMoveEvent) => {
-      const { over, active } = event
-      const activeId = active?.id as number
-      const overId = over?.id as number | Statuses
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { over, active } = event
+    const activeId = active?.id as number
+    const overId = over?.id as number | Statuses
 
-      if (!overId) return
+    if (!overId) return
 
-      const activeContainer = findContainer(activeId) as Statuses
-      const overContainer = findContainer(overId) as Statuses
+    const activeContainer = findContainer(activeId, sortedCandidates) as Statuses
+    const overContainer = findContainer(overId, sortedCandidates) as Statuses
 
-      const currentMousePosition = { x: event.delta.x, y: event.delta.y }
-      if (
-        lastMousePosition.current &&
-        Math.abs(lastMousePosition.current.x - currentMousePosition.x) < MOVEMENT_THRESHOLD &&
-        Math.abs(lastMousePosition.current.y - currentMousePosition.y) < MOVEMENT_THRESHOLD
-      ) {
-        return // Prevents updates if movement is too small
+    const currentMousePosition = { x: event.delta.x, y: event.delta.y }
+    if (
+      lastMousePosition.current &&
+      Math.abs(lastMousePosition.current.x - currentMousePosition.x) < MOVEMENT_THRESHOLD &&
+      Math.abs(lastMousePosition.current.y - currentMousePosition.y) < MOVEMENT_THRESHOLD
+    ) {
+      return // Prevents updates if movement is too small
+    }
+
+    lastMousePosition.current = currentMousePosition
+
+    if (!activeContainer || !overContainer || activeContainer === overContainer) return
+
+    setSortedCandidates(prev => {
+      const candidate = findItem(activeId, sortedCandidates)
+
+      if (!prev[activeContainer] || !prev[overContainer] || !candidate) return prev
+
+      const activeIndex = active.data.current?.sortable?.index ?? -1
+      const overIndex = over?.data.current?.sortable?.index ?? -1
+
+      const alreadyMoved =
+        prev[activeContainer] &&
+        prev[overContainer] &&
+        prev[overContainer].some(c => c.id === activeId)
+
+      if (alreadyMoved) {
+        return prev // Avoids a looping update
       }
 
-      lastMousePosition.current = currentMousePosition
+      const candidateUpdatedStatus = { ...candidate, status: overContainer }
 
-      if (!activeContainer || !overContainer || activeContainer === overContainer) return
+      return moveBetweenContainers(
+        prev,
+        activeContainer,
+        activeIndex,
+        overContainer,
+        overIndex,
+        candidateUpdatedStatus
+      )
+    })
+  }
 
-      setSortedCandidates(prev => {
-        const candidate = findItem(activeId)
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    const activeId = active?.id as number
+    const overId = over?.id as number
 
-        if (!prev[activeContainer] || !prev[overContainer] || !candidate) return prev
+    // If no movement has been made, we stop here
+    if (!over || !overId) return
+    const activeContainer = active.data.current?.sortable.containerId as Statuses
+    const overContainer = over.data.current?.sortable.containerId as Statuses
+    const activeIndex = active.data.current?.sortable?.index ?? -1
+    const overIndex = over.data.current?.sortable?.index ?? -1
 
-        const activeIndex = active.data.current?.sortable.index
-        const overIndex = over?.data.current?.sortable.index || 0
+    if (activeIndex === -1 || overIndex === -1) return
 
-        const alreadyMoved =
-          prev[activeContainer] &&
-          prev[overContainer] &&
-          prev[overContainer].some(c => c.id === activeId)
+    const candidate = findItem(activeId, sortedCandidates)
+    if (!candidate) return
 
-        if (alreadyMoved) {
-          return prev // Avoids a looping update
-        }
+    setSortedCandidates(prev => {
+      if (!prev[activeContainer] || !prev[overContainer]) return prev
 
-        const candidateUpdatedStatus = { ...candidate, status: overContainer }
+      let updatedCandidates = { ...prev }
 
-        return moveBetweenContainers(
+      if (activeContainer === overContainer) {
+        // Reorder the column using arrayMove
+        const updatedColumn = arrayMove(prev[overContainer], activeIndex, overIndex)
+
+        // Calculate new position
+        const prevPosition = updatedColumn[overIndex - 1]?.position ?? 0
+        const nextPosition = updatedColumn[overIndex + 1]?.position ?? 0
+        const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
+
+        updatedColumn[overIndex] = { ...updatedColumn[overIndex], position: newPosition }
+
+        updatedCandidates = { ...prev, [overContainer]: updatedColumn }
+      } else {
+        // Move between containers
+        updatedCandidates = moveBetweenContainers(
           prev,
           activeContainer,
           activeIndex,
           overContainer,
           overIndex,
-          candidateUpdatedStatus
+          candidate
         )
-      })
-    },
-    [findContainer, findItem, moveBetweenContainers]
-  )
+      }
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event
-      const activeId = active?.id as number
-      const overId = over?.id as number
+      // Update the candidate's position before mutation
+      const updatedCandidate = {
+        ...candidate,
+        position: updatedCandidates[overContainer]?.[overIndex]?.position ?? candidate.position,
+      }
+      mutate(updatedCandidate)
 
-      // If no movement has been made, we stop here
-      if (!over || !overId) return
-      const activeContainer = active.data.current?.sortable.containerId as Statuses
-      const overContainer = over.data.current?.sortable.containerId as Statuses
-      const activeIndex = active.data.current?.sortable.index
-      const overIndex = over.data.current?.sortable.index || 0
-
-      const candidate = findItem(activeId)
-      if (!candidate) return
-
-      setSortedCandidates(prev => {
-        if (!prev[activeContainer] || !prev[overContainer]) return prev
-
-        let updatedCandidates = prev
-
-        if (activeContainer === overContainer) {
-          // Reorder the column using arrayMove
-          const updatedColumn = arrayMove(prev[overContainer], activeIndex, overIndex)
-
-          // Calculate new position
-          const prevPosition = updatedColumn[overIndex - 1]?.position ?? 0
-          const nextPosition = updatedColumn[overIndex + 1]?.position ?? 0
-          const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
-
-          updatedColumn[overIndex] = { ...updatedColumn[overIndex], position: newPosition }
-
-          updatedCandidates = { ...prev, [overContainer]: updatedColumn }
-        } else {
-          // Move between containers
-          updatedCandidates = moveBetweenContainers(
-            prev,
-            activeContainer,
-            activeIndex,
-            overContainer,
-            overIndex,
-            candidate
-          )
-        }
-        mutate({ ...candidate })
-        return updatedCandidates
-      })
-    },
-    [findItem, moveBetweenContainers, mutate]
-  )
+      return updatedCandidates
+    })
+  }
 
   return (
     <>
