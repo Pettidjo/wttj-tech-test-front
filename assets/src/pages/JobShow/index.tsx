@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useJob, useCandidates, useUpdateCandidate } from '../../hooks'
 import { Flex } from '@welcome-ui/flex'
@@ -16,7 +16,6 @@ import { insertAtIndex, removeAtIndex } from '../../utils/array'
 type Statuses = 'new' | 'interview' | 'hired' | 'rejected'
 const COLUMNS: Statuses[] = ['new', 'interview', 'hired', 'rejected']
 
-const MOVEMENT_THRESHOLD = 10 // Minimum motion threshold in pixels
 const magicNumber: number = 16384
 
 const initialObject: CandidatesByStatus = {
@@ -28,7 +27,6 @@ const initialObject: CandidatesByStatus = {
 
 function JobShow() {
   const { jobId } = useParams()
-  const lastMousePosition = useRef<{ x: number; y: number } | null>(null)
 
   const { job } = useJob(jobId)
   const { isLoading, candidates, isFetching } = useCandidates(jobId)
@@ -135,17 +133,6 @@ function JobShow() {
 
     const activeContainer = findContainer(activeId, sortedCandidates) as Statuses
     const overContainer = findContainer(overId, sortedCandidates) as Statuses
-
-    const currentMousePosition = { x: event.delta.x, y: event.delta.y }
-    if (
-      lastMousePosition.current &&
-      Math.abs(lastMousePosition.current.x - currentMousePosition.x) < MOVEMENT_THRESHOLD &&
-      Math.abs(lastMousePosition.current.y - currentMousePosition.y) < MOVEMENT_THRESHOLD
-    ) {
-      return // Prevents updates if movement is too small
-    }
-
-    lastMousePosition.current = currentMousePosition
 
     if (!activeContainer || !overContainer || activeContainer === overContainer) return
 
