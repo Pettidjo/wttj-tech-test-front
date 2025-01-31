@@ -3,7 +3,7 @@ import Config
 # Configure your database
 config :wttj, Wttj.Repo,
   username: "postgres",
-  password: "Jonathan1313",
+  password: "postgres",
   hostname: "localhost",
   database: "wttj_dev",
   stacktrace: true,
