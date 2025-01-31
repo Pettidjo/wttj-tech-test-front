@@ -15,6 +15,9 @@ export default defineConfig({
     environment: 'jsdom',
     teardownTimeout: 1000,
     setupFiles: './src/test/setup.ts',
+    coverage: {
+      provider: 'istanbul',
+    },
     minWorkers: 1,
   },
 })

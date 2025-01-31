@@ -4,6 +4,9 @@
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
 
+# If you run "npm run coverage", coverage assets end up here.
+/assets/coverage/
+
 # The directory Mix downloads your dependencies sources to.
 /deps/
 
