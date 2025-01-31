@@ -95,7 +95,6 @@ function JobShow() {
       )
 
       if (itemExistsInOtherContainer) {
-        console.log({ items })
         const containerWithDuplicate = Object.keys(items).find(key =>
           items[key as keyof CandidatesByStatus]?.some(c => c.id === item.id)
         ) as Statuses
