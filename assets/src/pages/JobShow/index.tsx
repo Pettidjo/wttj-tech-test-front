@@ -36,6 +36,7 @@ function JobShow() {
   useEffect(() => {
     if (!candidates) return
 
+    //Sorts the candidates for each column based on their position.
     const sortedCandidates = COLUMNS.reduce(
       (acc, column) => {
         acc[column] = [...(candidates[column] || [])].sort((a, b) => a.position - b.position)
@@ -47,22 +48,50 @@ function JobShow() {
     setSortedCandidates(sortedCandidates)
   }, [candidates, isFetching])
 
-  const findContainer = useCallback((id: Statuses | number, candidates: CandidatesByStatus) => {
-    if (id in candidates) return id
+  /**
+   * Finds the container (status) that a candidate belongs to.
+   *
+   * @param id - The ID of the candidate or the status.
+   * @param candidates - An object where keys are statuses and values are arrays of candidates.
+   * @returns The status ID if found, otherwise null.
+   */
+  const findContainer = useCallback(
+    (id: Statuses | number, candidates: CandidatesByStatus): Statuses | null => {
+      if (id in candidates) return id as Statuses
 
-    const container = Object.keys(candidates).find(key =>
-      candidates[key as keyof CandidatesByStatus]?.some((item: Candidate) => item.id === id)
-    )
+      const container = Object.keys(candidates).find(key =>
+        candidates[key as keyof CandidatesByStatus]?.some((item: Candidate) => item.id === id)
+      )
 
-    return container || null
-  }, [])
+      return (container as Statuses) || null
+    },
+    []
+  )
 
-  const findItem = useCallback((id: number, candidates: CandidatesByStatus) => {
-    return Object.values(candidates)
-      .flatMap(a => a)
-      .find(c => c.id === id)
-  }, [])
+  /**
+   * Finds an item by its ID from a collection of candidates grouped by status.
+   *
+   * @param id - The ID of the item to find.
+   * @param candidates - An object where the keys are statuses and the values are arrays of candidates.
+   * @returns The candidate with the specified ID, or undefined if not found.
+   */
+  const findItem = useCallback(
+    (id: number, candidates: CandidatesByStatus): Candidate | undefined => {
+      return Object.values(candidates)
+        .flatMap(a => a)
+        .find(c => c.id === id)
+    },
+    []
+  )
 
+  /**
+   * Calculates a new position for a candidate between two positions.
+   *
+   * @param prevPosition - The position of the previous candidate.
+   * @param nextPosition - The position of the next candidate.
+   * @param magicNumber - A constant used to calculate the new position.
+   * @returns The new position for the candidate.
+   */
   const calculateNewPosition = useCallback(
     (prevPosition: number, nextPosition: number, magicNumber: number): number => {
       if (prevPosition === nextPosition) {
@@ -76,6 +105,17 @@ function JobShow() {
     []
   )
 
+  /**
+   * Moves a candidate between two containers (statuses) and updates their position.
+   *
+   * @param items - The current state of candidates grouped by status.
+   * @param activeContainer - The status from which the candidate is being moved.
+   * @param activeIndex - The index of the candidate in the active container.
+   * @param overContainer - The status to which the candidate is being moved.
+   * @param overIndex - The index at which the candidate is being placed in the over container.
+   * @param item - The candidate being moved.
+   * @returns The updated state of candidates grouped by status.
+   */
   const moveBetweenContainers = useCallback(
     (
       items: CandidatesByStatus,
@@ -84,7 +124,7 @@ function JobShow() {
       overContainer: Statuses,
       overIndex: number,
       item: Candidate
-    ) => {
+    ): CandidatesByStatus => {
       if (!items[activeContainer] || !items[overContainer]) return items
 
       // Check if element already exists in another container
@@ -94,6 +134,8 @@ function JobShow() {
           items[key as keyof CandidatesByStatus]?.some(c => c.id === item.id)
       )
 
+      // if an item exists in another container. It finds the container that has a duplicate of the item
+      // removes the duplicate from that container, and returns the updated items object.
       if (itemExistsInOtherContainer) {
         const containerWithDuplicate = Object.keys(items).find(key =>
           items[key as keyof CandidatesByStatus]?.some(c => c.id === item.id)
@@ -107,6 +149,7 @@ function JobShow() {
         return items
       }
 
+      // Calculate new position for the candidate
       const prevPosition = items[overContainer][overIndex - 1]?.position || 0
       const nextPosition = items[overContainer][overIndex]?.position || 0
       const newPosition = calculateNewPosition(prevPosition, nextPosition, magicNumber)
@@ -138,6 +181,7 @@ function JobShow() {
     setSortedCandidates(prev => {
       const candidate = findItem(activeId, sortedCandidates)
 
+      // check if the candidate is found
       if (!prev[activeContainer] || !prev[overContainer] || !candidate) return prev
 
       const activeIndex = active.data.current?.sortable?.index ?? -1
@@ -152,6 +196,7 @@ function JobShow() {
         return prev // Avoids a looping update
       }
 
+      // Update candidate status
       const candidateUpdatedStatus = { ...candidate, status: overContainer }
 
       return moveBetweenContainers(
@@ -216,6 +261,7 @@ function JobShow() {
         ...candidate,
         position: updatedCandidates[overContainer]?.[overIndex]?.position ?? candidate.position,
       }
+
       mutate(updatedCandidate)
 
       return updatedCandidates
